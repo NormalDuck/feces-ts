@@ -235,6 +235,8 @@ function feces.init(newWorld: jecs.World)
 	assert(newWorld, "You must provide a world to feces")
 	world = newWorld
 	replicated = world:component() :: jecs.Id<PlayerObject>
+	feces.replicated = replicated
+	
 	queries = {
 		[1] = world:query(replicated):cached(),
 		[2] = world:query(pair(replicated, Wildcard)):cached(),
@@ -477,4 +479,4 @@ function feces.getFullPacket(): EntityChanges
 	return packet
 end
 
-return table.freeze(feces) :: typeof(feces)
+return feces
