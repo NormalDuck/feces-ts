@@ -1,7 +1,8 @@
 ### TODO:
 - [ ] change output to provide the packets by component, allowing better replication through compiling libraries
     - [ ] reduce string key usage and opt for contiguous lists if possible?
-= [ ] remove packets with no changes?
+- [ ] set up tests so that we can make sure the package works as expected
+- [ ] remove packets with no changes? (may already be a feature, I don't remember)
 - [x] add example
 - [x] add method to filter components that can be replicated to prevent mistakes?
 
