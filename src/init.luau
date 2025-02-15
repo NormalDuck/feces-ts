@@ -32,11 +32,10 @@ export type PlayerObject = Player | { Player } | nil
 
 local isServer = game:GetService("RunService"):IsServer()
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local jecs = require(ReplicatedStorage.Packages.Jecs)
-local equals = require(ReplicatedStorage.Packages.Freeze).Dictionary.equals
-local ref = require(ReplicatedStorage.Hooks.ref)
-local refs = require(ReplicatedStorage.refs)
+local jecs = require("../roblox_packages/Jecs")
+local equals = require("dictionaryEquals")
+local ref = require("ref")
+local refs = require("refs")
 
 local pair = jecs.pair
 local onRemove = jecs.OnRemove
