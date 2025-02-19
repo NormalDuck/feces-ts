@@ -80,7 +80,7 @@ local function addPacket(collection: { Packet }, packet: Packet)
 			containsChange = true
 			break
 		end
-		
+
 		for _ in entity do
 			containsChange = true
 			break
@@ -128,7 +128,7 @@ local function componentChanges<T>(prevComponentValue: T | {}, currComponentValu
 		-- print("previous value == nil so curr value HAS to be changed")
 		return currComponentValue
 	end
-	
+
 	if type1 ~= type2 or type2 ~= "table" then
 		-- print("both values are tables and different tables")
 		return currComponentValue
@@ -232,11 +232,11 @@ end
 
 -- PUBLIC API
 function feces.init(newWorld: jecs.World)
+	print("INITIALIZED!!")
 	assert(newWorld, "You must provide a world to feces")
 	world = newWorld
 	replicated = world:component() :: jecs.Id<PlayerObject>
 	feces.replicated = replicated
-	
 	queries = {
 		[1] = world:query(replicated):cached(),
 		[2] = world:query(pair(replicated, Wildcard)):cached(),
@@ -251,7 +251,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 	}
 
 	local playerLinks: {[number]: Player} = {}
-	
+
 	for key, query in queries do
 		local isPair: boolean = key == 2
 		for _, archetype in query:archetypes() do
@@ -275,7 +275,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 							end
 							local playerValue = world:get(entity, pair(replicated, componentId))
 							playerLinks[componentId] = playerValue
-							
+
 							addChanges(
 								stringEntity,
 								componentId,
@@ -290,7 +290,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 						if type(componentValue) == "function" then
 							continue
 						end
-						
+
 						-- componentValue = if componentValue == nil then NIL_VALUE else componentValue
 						local playerValue = world:get(entity, replicated)
 						playerLinks[componentId] = playerValue
@@ -307,7 +307,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 			end
 		end
 	end
-	
+
 	for stringEntity, components in previous do
 		local entity = assertNumber(stringEntity)
 		if not world:contains(entity) then
@@ -333,7 +333,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 						end
 						return
 					end
-					
+
 					systemPackets.public.entities[stringEntity] = systemPackets.public.entities[stringEntity] or {}
 					systemPackets.public.entities[stringEntity][stringId] = DELETE_VALUE
 				end
@@ -362,6 +362,7 @@ function feces.getPackets(): () -> (number?, Packet?)
 	end
 end
 
+local Players = game:GetService("Players")
 function feces.applyPackets(entities: EntityChanges)
 	assert(world, "You must provide a world by calling feces.init before feces.applyPackets")
 	for entity: any, components in entities do
@@ -370,19 +371,13 @@ function feces.applyPackets(entities: EntityChanges)
 			entity:delete()
 			continue
 		end
-		
+
 		for id, component in components do
-			-- if component == Players.LocalPlayer then
-			-- 	refs["LocalPlayer"] = entity
-			-- 	refs[component.UserId] = entity
-			-- elseif typeof(component) == "Instance" and component:IsA("Player") then
-			-- 	refs[component.UserId] = entity
-			-- end
 			if component == DELETE_VALUE then
 				entity:remove(assertNumber(id))
 				continue
 			end
-			
+
 			entity:set(assertNumber(id), if component == NIL_VALUE then nil else component)
 		end
 	end
@@ -418,7 +413,7 @@ end
 function feces.getFullPacket(): EntityChanges
 	assert(queries and world, "You must provide a world by calling feces.init before feces.getFullPacket")
 	local packet = {}
-	
+
 	for key, query in queries do
 		local isPair: boolean = key == 2
 		for _, archetype in query:archetypes() do
@@ -475,7 +470,7 @@ function feces.getFullPacket(): EntityChanges
 			end
 		end
 	end
-	
+
 	return packet
 end
 
