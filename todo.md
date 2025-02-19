@@ -2,7 +2,7 @@
 - [ ] change output to provide the packets by component, allowing better replication through compiling libraries
     - [ ] reduce string key usage and opt for contiguous lists if possible?
 - [ ] set up tests so that we can make sure the package works as expected
-- [ ] remove packets with no changes? (may already be a feature, I don't remember)
+- [x] remove packets with no changes? (may already be a feature, I don't remember)
 - [ ] make it easier to exclude players from replication, maybe by making the value `(Player) -> boolean`
 - [x] add example
 - [x] add method to filter components that can be replicated to prevent mistakes?
