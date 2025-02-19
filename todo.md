@@ -2,6 +2,7 @@
 - [ ] change output to provide the packets by component, allowing better replication through compiling libraries
     - [ ] reduce string key usage and opt for contiguous lists if possible?
 - [ ] set up tests so that we can make sure the package works as expected
+- [ ] rewrite targets based on [this discord message](https://discord.com/channels/385151591524597761/1248734074940559511/1341854413014175797)
 - [x] remove packets with no changes? (may already be a feature, I don't remember)
 - [ ] make it easier to exclude players from replication, maybe by making the value `(Player) -> boolean`
 - [x] add example
