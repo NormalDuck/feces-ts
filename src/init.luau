@@ -198,22 +198,26 @@ local function target(archetype, index): jecs.Id<any>?
 	local nth = index or 0
 	local idr = world.componentIndex[pair(replicated, Wildcard)]
 	if not idr then
-		return
+		return nil
 	end
 
-	local tr = idr.cache[archetype.id]
-	if not tr then
-		return
+	local count = idr.counts[archetype.id]
+	if not count then
+		return nil
 	end
-
-	local count = tr.count
+	
 	if nth >= count then
 		nth = nth + count + 1
 	end
 
-	nth = archetype.types[nth + tr.column]
+	local tr = idr.columns[archetype.id]
+	if not tr then
+		return nil
+	end
+
+	nth = archetype.types[nth + tr]
 	if not nth then
-		return
+		return nil
 	end
 
 	return jecs.entity_index_get_alive(world.entity_index, if nth > ECS_ENTITY_MASK then (nth // ECS_ID_FLAGS_MASK) % ECS_ENTITY_MASK else nth)
@@ -232,7 +236,6 @@ end
 
 -- PUBLIC API
 function feces.init(newWorld: jecs.World)
-	print("INITIALIZED!!")
 	assert(newWorld, "You must provide a world to feces")
 	world = newWorld
 	replicated = world:component() :: jecs.Id<PlayerObject>
@@ -313,7 +316,6 @@ function feces.getPackets(): () -> (number?, Packet?)
 		if not world:contains(entity) then
 			systemPackets.public.entities[stringEntity] = DELETE_VALUE
 			previous[stringEntity] = nil
-			print("REGISTERING DELETE:", entity)
 			continue
 		end
 
