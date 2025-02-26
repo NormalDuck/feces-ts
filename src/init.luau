@@ -33,9 +33,9 @@ export type PlayerObject = Player | { Player } | nil
 local isServer = game:GetService("RunService"):IsServer()
 
 local jecs = require("../roblox_packages/Jecs")
-local equals = require("dictionaryEquals")
-local ref = require("ref")
-local refs = require("refs")
+local equals = require("./dictionaryEquals")
+local ref = require("./ref")
+local refs = require("./refs")
 
 local pair = jecs.pair
 local onRemove = jecs.OnRemove
