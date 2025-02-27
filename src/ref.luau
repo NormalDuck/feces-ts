@@ -14,7 +14,7 @@ local function ref(world, key)
         refs[key] = e
     end
     -- Cannot cache handles because they will get invalidated
-    return handle(e)
+    return handle(world, e)
 end
 
 return ref

@@ -14,6 +14,7 @@ Example in `examples/replication.luau` for how to use it. Here are some explanat
 ```luau
 feces.init :: (Jecs.World) -> ()
 feces.replicated :: Jecs.Component<{Player} | Player?>
+-- feces.replicated is readonly
 ```
 `init()` should be obvious as to what it does, if the world is not set there will be warnings in the console.
 

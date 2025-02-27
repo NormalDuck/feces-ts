@@ -364,7 +364,6 @@ function feces.getPackets(): () -> (number?, Packet?)
 	end
 end
 
-local Players = game:GetService("Players")
 function feces.applyPackets(entities: EntityChanges)
 	assert(world, "You must provide a world by calling feces.init before feces.applyPackets")
 	for entity: any, components in entities do
