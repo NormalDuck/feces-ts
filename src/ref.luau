@@ -6,7 +6,7 @@ local refs = require("./refs")
 
 local function ref(world, key)
     if not key then
-        return handle(world:entity())
+        return handle(world, world:entity())
     end
     local e = refs[key]
     if not e then
