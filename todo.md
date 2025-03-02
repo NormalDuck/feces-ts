@@ -18,5 +18,9 @@ I think when the user wants to get all the packets but separate them by componen
         }
     }
 }
+
+
+getComponentChanges()
+getDeletedEntities()
 ```
 but then idk how to represent when entities are deleted. The other slight issue is that it doesn't represent public packets, so FireAllClients wouldn't work, but you can just add the component changes to all packets anyways.

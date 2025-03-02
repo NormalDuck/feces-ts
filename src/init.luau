@@ -2,6 +2,8 @@
 --!optimize 2
 --!native
 
+warn("killer.gg HIGHLY advises against using this version of feces. Head to killergg/feces for the up to date implementation.")
+
 -- type pair<First, Second> = number & { __relation: First }
 -- type entity<T = nil> = number & { __T: T }
 -- type component<T = nil> = entity<T> | pair<entity<T>, entity<unknown>>
