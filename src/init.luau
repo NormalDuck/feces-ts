@@ -1,480 +1,397 @@
 --!strict
 --!optimize 2
---!native
-
-warn("killer.gg HIGHLY advises against using this version of feces. Head to killergg/feces for the up to date implementation.")
-
--- type pair<First, Second> = number & { __relation: First }
--- type entity<T = nil> = number & { __T: T }
--- type component<T = nil> = entity<T> | pair<entity<T>, entity<unknown>>
-type targets = { [number]: number }
-
-type NIL_VALUE = "__n"
-local NIL_VALUE: NIL_VALUE = "__n"
-
-type DELETE_VALUE = "__d"
-local DELETE_VALUE: DELETE_VALUE = "__d"
-
-export type EntityValues = {
-	[string]: {
-		[string]: any,
-	},
-}
-export type EntityChanges = {
-	[string]: DELETE_VALUE | {
-		[string]: any,
-	},
-}
-export type Packet = {
-	player: Player?,
-	entities: EntityChanges,
-}
-
-export type PlayerObject = Player | { Player } | nil
-
-local isServer = game:GetService("RunService"):IsServer()
-
-local jecs = require("../roblox_packages/Jecs")
-local equals = require("./dictionaryEquals")
-local ref = require("./ref")
-local refs = require("./refs")
+local Players = game:GetService("Players")
+local jecs = require("../roblox_packages/jecs")
+local ref = require("../roblox_packages/ref")
+local refs = require("../roblox_packages/refs")
+local world = require("../roblox_packages/world")
 
 local pair = jecs.pair
+local __ = jecs.Wildcard
 local onRemove = jecs.OnRemove
-local Wildcard = jecs.Wildcard
-local previous: EntityValues = {}
 
-local ECS_ENTITY_MASK = bit32.lshift(1, 24)
-local ECS_ID_FLAGS_MASK = 0x10
+type Entity = jecs.Entity & number
+type Component<T = any> = jecs.Entity<T> & number
 
-local world: jecs.World, replicated: jecs.Id<PlayerObject>, queries: {jecs.Query<any>} = nil, nil, {}
+type nilValue = "__n"
+local NIL_VALUE: nilValue = "__n"
+
+type deleteValue = "__d"
+local DELETE_VALUE: deleteValue = "__d"
+
+type PlayerObject = Player? | { Player } | (Player) -> ()
+type changes = {
+	[Component]: {
+		[Player]: {
+			value: { [Entity]: any },
+			special: { [Entity]: deleteValue | nilValue }
+		}
+	}
+}
+
+type deleted = {
+	[Player]: { Entity }
+}
+
+type applyable = {
+	[Component]: {
+		value: { [Entity]: any },
+		special: { [Entity]: deleteValue | nilValue }
+	}
+} & { __d: { Entity }}
+
+export type feces = {
+	apply: (applyable) -> nil, -- applies component changes to world
+	delta: () -> (changes, deleted), -- gets the component changes to replicate
+
+	-- gets the entity deletions to replicate
+	full: () -> changes, -- gets all currently replicating components
+	group: (changes, deleted) -> { [Player]: applyable },
+	
+	-- hooks into applying replication
+	added: ((Entity) -> nil),
+	changed: ((Entity, Component) -> nil),
+	deleted: ((Entity) -> nil)
+
+}
+
+local replicated = world:component() :: Component<PlayerObject>
+local queries = {
+	single = world:query(replicated):cached(),
+	pair = world:query(pair(replicated, __)):cached(),
+}
+
+local added, changed, deleted = nil, nil, nil
+local previous: { [Component]: { [Entity]: any | "__n" }} = {}
 local feces = {
 	replicated = replicated,
+	queries = queries
 }
 
 -- PRIVATE FUNCTIONS
-local function assertNumber(str: string): number
-	local result = tonumber(str)
-	assert(type(result) == "number", str .. " is not a number")
-	return result
-end
 
-local function makePacket(plr: Player?): Packet
-	return {
-		entities = {},
-		player = plr,
-	}
-end
-
-local function getPlayers(info: PlayerObject): { Player }?
+local function getPlayers(info: PlayerObject): { Player? }
 	if typeof(info) == "table" then
 		return info
-	end
-	return if info ~= nil then { info } else nil
-end
-
---- Checks if a packet contains any changes to replicate, and appends to list
-local function addPacket(collection: { Packet }, packet: Packet)
-	--use the standard iterator for maps because the # operator doesn't work
-	local containsChange = false
-	for _, entity: any in packet.entities do
-		if entity == DELETE_VALUE then
-			containsChange = true
-			break
+	elseif typeof(info) == "function" then
+		local result = {}
+		for key, player in Players:GetPlayers() do
+			if not info(player) then
+				continue
+			end
+			
+			result[key] = player
 		end
-
-		for _ in entity do
-			containsChange = true
-			break
-		end
-		if containsChange then
-			break
-		end
-	end
-	if not containsChange then
-		return
-	end
-	--add the packet to the collection because there was a change
-	table.insert(collection, packet)
-end
-
---- If there is a (shallow) difference in the object it will return the current object, else nil
-local function componentChanges<T>(prevComponentValue: T | {}, currComponentValue: T | {}): NIL_VALUE | T | {} | nil
-	--new value is nil, then change to nil
-	if currComponentValue == nil then
-		if prevComponentValue == NIL_VALUE then
-			return
-		end
-		if prevComponentValue == nil then
-			-- print("tag added, registered as change")
-			return NIL_VALUE
-		end
-	end
-
-	local type1, type2 = typeof(prevComponentValue), typeof(currComponentValue)
-
-	--NO CHANGES
-	if type1 ~= "table" and type2 ~= "table" and prevComponentValue == currComponentValue then
-		-- if debug_component == 1 then print("no difference because values are equal") end
-		return nil
-	end
-
-	--new value is nil, then change to nil
-	if currComponentValue == nil then
-		-- print("component set to nil")
-		return NIL_VALUE
-	end
-
-	--old value is nil, then change to new value
-	if prevComponentValue == nil then
-		-- print("previous value == nil so curr value HAS to be changed")
-		return currComponentValue
-	end
-
-	if type1 ~= type2 or type2 ~= "table" then
-		-- print("both values are tables and different tables")
-		return currComponentValue
-	end
-
-	if type1 == "table" and type2 == "table" then
-		if not equals(currComponentValue, prevComponentValue) then
-			return currComponentValue
-		end
-	end
-
-	--no table changes found!
-	return nil
-end
-
-local function reverseRef(entity: number): number?
-	if not entity then
-		return nil
-	elseif isServer then
-		return entity
-	end
-	for key, value in refs :: { number } do
-		if value == entity then
-			return key
-		end
-	end
-
-	return entity
-end
-
-local function addChanges(
-	entity: string,
-	componentId: number,
-	componentValue,
-	group: { public: Packet } & { [Player]: Packet },
-	playerValue: PlayerObject
-)
-	local stringComponentId = tostring(componentId)
-	previous[entity] = if previous[entity] then previous[entity] else {}
-
-	local changes = componentChanges(previous[entity][stringComponentId], componentValue)
-	if changes == nil then
-		return --NO DIFFERENCE IN VALUE
-	end
-
-	local players: { Player }? = getPlayers(playerValue)
-	previous[entity][stringComponentId] = changes
-
-	entity = tostring(reverseRef(assertNumber(entity)))
-	-- add to the map of previous entities and constantly check if the world contains them
-	--find the right packet to edit and add the component's diff
-	if players == nil then
-		--add to public packet
-		group.public.entities[entity] = group.public.entities[entity] or {}
-		group.public.entities[entity][stringComponentId] = changes
-	else
-		for _, player in players do
-			group[player] = group[player] or makePacket(player);
-			group[player].entities[entity] = group[player].entities[entity] or {};
-			group[player].entities[entity][stringComponentId] = changes;
-		end
-	end
-end
-
-
-local function target(archetype, index): jecs.Id<any>?
-	local nth = index or 0
-	local idr = world.componentIndex[pair(replicated, Wildcard)]
-	if not idr then
-		return nil
-	end
-
-	local count = idr.counts[archetype.id]
-	if not count then
-		return nil
+		return result
 	end
 	
-	if nth >= count then
-		nth = nth + count + 1
-	end
-
-	local tr = idr.columns[archetype.id]
-	if not tr then
-		return nil
-	end
-
-	nth = archetype.types[nth + tr]
-	if not nth then
-		return nil
-	end
-
-	return jecs.entity_index_get_alive(world.entity_index, if nth > ECS_ENTITY_MASK then (nth // ECS_ID_FLAGS_MASK) % ECS_ENTITY_MASK else nth)
+	return { info }
 end
 
-local function getAllTargets(archetype, index: number, targets: targets): targets
-	local componentId = target(archetype, index)
-	if not componentId then
-		return targets
+local function deepEquals(a: any, b: any): boolean
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return a == b
 	end
 
-	table.insert(targets, componentId)
-	return getAllTargets(archetype, index + 1, targets)
+	for key, value in a do
+		if not deepEquals(value, b[key]) then
+			return false
+		end
+	end
+	for key, value in b do
+		if not deepEquals(value, a[key]) then
+			return false
+		end
+	end
+	return true
 end
 
+local function diffComponent(previous: any, current: any): nilValue | any | {}?
+	if current == nil then
+		return if previous == NIL_VALUE then nil else NIL_VALUE
+	end
+	if previous == nil then
+		return current
+	end
 
--- PUBLIC API
-function feces.init(newWorld: jecs.World)
-	assert(newWorld, "You must provide a world to feces")
-	world = newWorld
-	replicated = world:component() :: jecs.Id<PlayerObject>
-	feces.replicated = replicated
-	queries = {
-		[1] = world:query(replicated):cached(),
-		[2] = world:query(pair(replicated, Wildcard)):cached(),
-	}
+	if typeof(previous) ~= typeof(current) then
+		return if previous == current then nil else current
+	end
+	return if deepEquals(previous, current) then nil else current
 end
 
-function feces.getPackets(): () -> (number?, Packet?)
-	assert(queries and world, "You must provide a world by calling feces.init before feces.getPackets")
-	local packets: { Packet } = {}
-	local systemPackets: { public: Packet } & { [Player]: Packet } = {
-		public = makePacket(),
-	}
+local function fill(changes: changes, comp: Component, ent: Entity, value: any,  players: PlayerObject)
+	changes[comp] = changes[comp] or {}
+	
+	for _, player in getPlayers(players) do
+		if not player then
+			continue
+		end
 
-	local playerLinks: {[number]: Player} = {}
+		changes[comp][player] = changes[comp][player] or { value = {}, special = {} }
+		if value == DELETE_VALUE or value == NIL_VALUE then
+			changes[comp][player].special[ent] = value
+		else
+			changes[comp][player].value[ent] = value
+		end
+	end
+end
 
-	for key, query in queries do
-		local isPair: boolean = key == 2
-		for _, archetype in query:archetypes() do
-			local entities: { number } = archetype.entities
-			local columns: { any } = archetype.columns
+local function reconcile(changes: changes, player: PlayerObject, entity: Entity, component: Component, value: any)
+	previous[component] = previous[component] or {}
+	local diff = diffComponent(previous[component][entity], value)
+	if not diff then
+		return
+	end
 
-			--go through entities
-			for row, entity: any in entities do
-				local stringEntity = tostring(entity)
-				for columnNumber: number, column in columns do
-					if isPair then	
-						local targets = getAllTargets(archetype, 0, {})
-						if not targets then
-							continue
-						end
+	previous[component][entity] = if diff == DELETE_VALUE then nil else diff
+	if player == nil then
+		fill(changes, component, entity, diff, Players:GetPlayers())
+		return
+	end
+	
+	fill(changes, component, entity, diff, player)
+end
 
-						for _, componentId in targets do
-							local componentValue = world:get(entity, componentId)
-							if type(componentValue) == "function" then
-								continue
-							end
-							local playerValue = world:get(entity, pair(replicated, componentId))
-							playerLinks[componentId] = playerValue
-
-							addChanges(
-								stringEntity,
-								componentId,
-								componentValue,
-								systemPackets,
-								playerValue
-							)
-						end
-					else
-						local componentId: number = archetype.types[columnNumber]
-						local componentValue = column[row]
-						if type(componentValue) == "function" then
-							continue
-						end
-
-						-- componentValue = if componentValue == nil then NIL_VALUE else componentValue
-						local playerValue = world:get(entity, replicated)
-						playerLinks[componentId] = playerValue
-
-						addChanges(
-							stringEntity,
-							componentId,
-							componentValue,
-							systemPackets,
-							playerValue
-						)
-					end
-				end
+local function replicating(callback: (Component, PlayerObject, Entity, any, Component) -> nil)
+	local replicated = feces.replicated
+	for _, archetype in queries.single:archetypes() do
+		local entities = archetype.entities
+		local columns = archetype.columns
+		local types = archetype.types
+		local record = archetype.records[replicated]
+		if not record then
+			continue
+		end
+		
+		local playerColumn = columns[record]
+		for key, id in types do
+			if id == replicated :: number then
+				continue
 			end
-		end
-	end
-
-	for stringEntity, components in previous do
-		local entity = assertNumber(stringEntity)
-		if not world:contains(entity) then
-			systemPackets.public.entities[stringEntity] = DELETE_VALUE
-			previous[stringEntity] = nil
-			continue
-		end
-
-		if type(components) ~= "table" then
-			continue
-		end
-
-		for stringId in components do
-			local id = assertNumber(stringId)
-			world:set(id, onRemove, function(ent)
-				if ent == entity then
-					previous[stringEntity][stringId] = nil
-					local playerData = getPlayers(playerLinks[id])
-					if playerData then
-						for _, player in playerData do
-							systemPackets[player].entities[stringEntity][stringId] = DELETE_VALUE
-						end
-						return
-					end
-
-					systemPackets.public.entities[stringEntity] = systemPackets.public.entities[stringEntity] or {}
-					systemPackets.public.entities[stringEntity][stringId] = DELETE_VALUE
-				end
-			end)
-		end
-	end
-
-	--add new packets to collections
-	for _, packet in systemPackets :: { [any]: Packet } do
-		if next(packet.entities) == nil then
-			continue
-		end
-
-		addPacket(packets, packet)
-	end
-
-	local i = 0
-	return function(): (number?, Packet?)
-		i += 1
-		local this = packets[i]
-		if this == nil then
-			i = 0
-			return
-		end
-		return i, this
-	end
-end
-
-function feces.applyPackets(entities: EntityChanges)
-	assert(world, "You must provide a world by calling feces.init before feces.applyPackets")
-	for entity: any, components in entities do
-		entity = ref(world, `repl{entity}`)
-		if type(components) ~= "table" then 
-			entity:delete()
-			continue
-		end
-
-		for id, component in components do
-			if component == DELETE_VALUE then
-				entity:remove(assertNumber(id))
+			local column = columns[key]
+			if not column then
 				continue
 			end
 
-			entity:set(assertNumber(id), if component == NIL_VALUE then nil else component)
+			for row, entity in entities do
+				local player = playerColumn[row]
+				callback(
+					id :: Component,
+					player,
+					entity :: Entity,
+					column[row],
+					replicated
+				)
+			end
+		end
+	end
+
+	for _, archetype in queries.pair:archetypes() do
+		local entities: { number } = archetype.entities
+		local types = archetype.types
+		local records = archetype.records
+
+		for _, id in types do
+			if not jecs.IS_PAIR(id) then
+				continue
+			end
+
+			if jecs.pair_first(world, id) ~= replicated :: number then
+				continue -- it's a pair but the first component isn't replicated e.g pair(someComponent, someOtherComponent) instead of pair(replicated, someOtherComponent)
+			end
+
+			local record = records[id]
+			if not record then
+				continue
+			end
+
+			local playerColumn = archetype.columns[record]
+			local component = jecs.pair_second(world, id)
+			for row, entity in entities do
+				if not world:has(entity :: Entity, component :: Component) then
+					continue
+				end
+
+				callback(
+					component :: Component,
+					playerColumn[row],
+					entity :: Entity,
+					world:get(
+						entity :: Entity,
+						component :: Component
+					),
+					id :: Component
+				)
+			end
 		end
 	end
 end
 
-function feces.filterPackets(entities: EntityChanges, ...: jecs.Id<any>)
-	local componentMap: { [jecs.Id<any>]: true? } = {}
-	for _, componentId in { ... } do
-		componentMap[componentId] = true
+-- PUBLIC FUNCTIONS
+
+function feces.apply(
+	delta: applyable
+)
+	if not delta then
+		warn("NO APPLYABLE DATA RECEIVED")
+		return
 	end
 
-	local filtered = {}
-	for entity, components in entities do
-		if type(components) ~= "table" then
+	for component, entities in delta :: {[any]: any } do
+		if not entities then
 			continue
 		end
-		for id, component in components do
-			if componentMap[`repl{id}` :: jecs.Id<any>] then
-				filtered[entity] = filtered[entity] or {}
-				filtered[entity][id] = component
+		
+		if component == DELETE_VALUE then
+			for _, entity in entities do
+				if deleted then
+					deleted(entity)
+				end
+				world:delete(entity)
+			end
+			continue
+		end
+		
+		for entity: Entity, value in entities.value do
+			if not refs[`repl{entity}`] then
+				world:set(ref(`repl{entity}`), component, value)
+				if added then
+					added(entity)
+				end
+			else
+				if changed then
+					changed(entity, component, value)
+				end
+				world:set(ref(`repl{entity}`), component, value)
 			end
 		end
+
+		for entity: Entity, value in entities.special do
+			local id = ref(`repl{entity}`)
+			if changed then -- here to previoew any changes
+				changed(
+					entity, component,
+					if value == NIL_VALUE or value == DELETE_VALUE
+					then nil else value
+				)
+			end
+
+			if value == DELETE_VALUE then
+				world:remove(id, component)
+				continue
+			end
+
+			--or we could put it here to let them see if it was deleted
+
+			world:set(id, component, 
+				if value == NIL_VALUE
+					then nil 
+					else value
+			)
+
+			--here to get the new value and see if deleted, but can't observe old value any more
+		end
 	end
-
-	return filtered
 end
 
-local function skimChanges(entity: string, componentId: string, componentValue, packet: EntityValues)
-	packet[entity] = packet[entity] or {}
-	packet[entity][componentId] = componentValue
-end
-
-function feces.getFullPacket(): EntityChanges
-	assert(queries and world, "You must provide a world by calling feces.init before feces.getFullPacket")
-	local packet = {}
-
-	for key, query in queries do
-		local isPair: boolean = key == 2
-		for _, archetype in query:archetypes() do
-			local entities: { number } = archetype.entities
-			local columns: { any } = archetype.columns
-
-			--go through entities
-			for row, entity: jecs.Entity in entities do
-				local stringEntity = tostring(entity)
-				for columnNumber: number, column in columns do
-					if isPair then	
-						local targets = getAllTargets(archetype, 0, {})
-						if not targets then
-							continue
-						end
-
-						for _, componentId in targets do
-							local componentValue = world:get(entity, componentId)
-							if type(componentValue) == "function" then
-								continue
-							end
-							local playerValue = world:get(entity, pair(replicated, componentId))
-							if playerValue then
-								continue
-							end
-
-							skimChanges(
-								stringEntity,
-								tostring(componentId),
-								componentValue,
-								packet
-							)
-						end
-					else
-						local componentId: string = tostring(archetype.types[columnNumber])
-						local componentValue = column[row]
-						if type(componentValue) == "function" then
-							continue
-						end
-
-						local playerValue = world:get(entity, replicated)
-						if playerValue then
-							continue
-						end
-
-						skimChanges(
-							stringEntity,
-							componentId,
-							componentValue,
-							packet
-						)
+function feces.delta()
+	local changes: changes = {}
+	local deleted: deleted = {}
+	
+	replicating(function(component, playerObject, entity: Entity, value, replicatedId)
+		reconcile(changes, playerObject, entity, component, value)
+		
+		world:set(replicatedId, onRemove, function(id: jecs.Entity)
+			if id == entity :: jecs.Entity then
+				for _, player in getPlayers(playerObject) do
+					if not player then
+						continue
 					end
+					
+					deleted[player] = id
 				end
 			end
+		end)
+		
+		if next(deleted) then
+			for _, player in getPlayers(playerObject) do
+				if not player then
+					continue
+				end
+				
+				local id = deleted[player]
+				if not id or id ~= entity :: jecs.Entity then
+					continue
+				end
+
+				previous[component] = previous[component] or {}
+				print("DELETING FROM PREVIOUS", entity, component)
+				previous[component][entity] = nil
+			end
+		end
+		
+		world:set(component, onRemove, function(id)
+			if id == entity :: jecs.Entity and not deleted[id :: Entity] then
+				print("component removed", id, component)
+				reconcile(changes, playerObject, id :: Entity, component, DELETE_VALUE)
+			end
+		end)
+	end)
+	
+	return changes, deleted
+end
+
+function feces.full()
+	local changes: changes = {}
+
+	replicating(function(component, player, entity, value)
+		fill(
+			changes,
+			component,
+			entity,
+			player,
+			value
+		)
+	end)
+
+	return changes
+end
+
+function feces.group(changes: changes, deleted: deleted): { [Player]: applyable }
+	local packets: { [Player]: applyable } = {}
+
+	for component, players in changes do
+		for player, entities in players do
+			packets[player] = packets[player] or {__d = {}}
+			packets[player][component] = packets[player][component] or { value = {}, special = {} }
+			for entity, value in entities.value do
+				(packets[player][component] :: any).value[entity] = value
+			end
+			for entity, value in entities.special do
+				(packets[player][component] :: any).special[entity] = value
+			end
 		end
 	end
 
-	return packet
+	for player, entities in deleted do
+		packets[player] = packets[player] or {__d = {}}
+		packets[player].__d = entities
+	end
+	
+	return packets
 end
 
-return feces
+function feces.added(callback: (Entity) -> nil)
+	added = callback
+end
+
+function feces.changed(callback: (Entity, Component) -> nil)
+	changed = callback
+end
+
+function feces.deleted(callback: (Entity) -> nil)
+	deleted = callback
+end
+
+return feces :: typeof(feces)
