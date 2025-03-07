@@ -245,33 +245,36 @@ function feces.apply(
 		
 		if component == DELETE_VALUE then
 			for _, entity in entities do
+				local id = ref(`repl{entity}`)
 				if deleted then
-					deleted(entity)
+					deleted(id)
 				end
-				world:delete(entity)
+				world:delete(id)
 			end
 			continue
 		end
 		
 		for entity: Entity, value in entities.value do
 			if not refs[`repl{entity}`] then
-				world:set(ref(`repl{entity}`), component, value)
+				local id = ref(`repl{entity}`)
+				world:set(id, component, value)
 				if added then
-					added(entity)
+					added(id)
 				end
 			else
+				local id = ref(`repl{entity}`)
 				if changed then
-					changed(entity, component, value)
+					changed(id, component, value)
 				end
-				world:set(ref(`repl{entity}`), component, value)
+				world:set(id, component, value)
 			end
 		end
 
 		for entity: Entity, value in entities.special do
 			local id = ref(`repl{entity}`)
-			if changed then -- here to previoew any changes
+			if changed then -- here to preview any changes
 				changed(
-					entity, component,
+					id, component,
 					if value == NIL_VALUE or value == DELETE_VALUE
 					then nil else value
 				)
@@ -346,13 +349,7 @@ function feces.full()
 	local changes: changes = {}
 
 	replicating(function(component, player, entity, value)
-		fill(
-			changes,
-			component,
-			entity,
-			player,
-			value
-		)
+		fill(changes, component, entity, player, value)
 	end)
 
 	return changes
