@@ -1,0 +1,63 @@
+title = "feces"  # From Git
+gitRepoUrl = "https://github.com/NeonD00m/feces" # From Git
+
+gitSourceBranch = "main"
+changelog = true
+classOrder = [["feces"]]
+
+[docusaurus]
+onBrokenLinks = "throw"
+onBrokenMarkdownLinks = "warn"
+favicon = "logo.png"
+
+# From git:
+organizationName = "NeonD00m"
+projectName = "feces"
+url = "https://neond00m.github.io"
+baseUrl = "/feces/"
+tagline = "Generalized Replication for jecs"
+
+# [navbar]
+# hideableSidebar = true
+
+[navbar]
+title = ""
+
+[navbar.logo]
+alt = "NeoNet"
+src = "https://cdn.discordapp.com/attachments/997871955199926386/1011762294658715808/NeoNetLogoFull478x256.png"
+
+# [[navbar.items]]
+# href = "https://discord.gg/eJAHVeEPkq"
+# label = "Velvera Open Source Discord"
+# position = "right"
+
+# [[navbar.items]]
+# href = "https://twitter.com/NeonD00m"
+# label = "Contact Me on Twitter"
+# position = "right"
+
+[footer]
+style = "dark"
+copyright = "Copyright © 2025 NeonD00m. Built with Moonwave and Docusaurus"
+
+# [[footer.links]]
+# title = "examples"
+
+# [[footer.links.items]]
+# label = "example"
+# href = "https://example.com/"
+
+[home]
+enabled = true
+includeReadme = false # Optional
+
+# [[home.features]]
+# title = "Easy-to-use API"
+# description = "Here's an example of what a RemoteEvent would look like on the Client & Server."
+# image = "https://cdn.discordapp.com/attachments/997871955199926386/1011744321202049106/carbonRemoteEvent.png"
+
+# [[home.features]]
+# title = "Feature 2"
+# description = "This is a second feature"
+# image = "https://url"
