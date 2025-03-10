@@ -23,7 +23,7 @@ local NIL_VALUE: nilValue = "__n"
 type deleteValue = "__d"
 local DELETE_VALUE: deleteValue = "__d"
 
-type PlayerObject = Player? | { Player } | (Player) -> ()
+type PlayerObject = Player? | { Player } | (Player) -> boolean
 
 --[=[ 
 	@within feces
