@@ -8,7 +8,7 @@ classOrder = [["feces"]]
 [docusaurus]
 onBrokenLinks = "throw"
 onBrokenMarkdownLinks = "warn"
-favicon = "logo.png"
+favicon = "images/newlogo.png"
 
 # From git:
 organizationName = "NeonD00m"
@@ -24,8 +24,8 @@ tagline = "Generalized Replication for jecs"
 title = ""
 
 [navbar.logo]
-alt = "NeoNet"
-src = "https://cdn.discordapp.com/attachments/997871955199926386/1011762294658715808/NeoNetLogoFull478x256.png"
+alt = "feces"
+src = "https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/newlogo.png"
 
 # [[navbar.items]]
 # href = "https://discord.gg/eJAHVeEPkq"
@@ -53,11 +53,16 @@ enabled = true
 includeReadme = false # Optional
 
 # [[home.features]]
-# title = "Easy-to-use API"
-# description = "Here's an example of what a RemoteEvent would look like on the Client & Server."
-# image = "https://cdn.discordapp.com/attachments/997871955199926386/1011744321202049106/carbonRemoteEvent.png"
+# title = "Integrated with Jecs"
+# description = "One line to replicate either a specific component or a whole entity!"
+# image = "images/basics.png"
 
 # [[home.features]]
-# title = "Feature 2"
-# description = "This is a second feature"
-# image = "https://url"
+# title = "Versatile Player-specific replication"
+# description = "Allows you to define which players to replicate to in a variety of ways."
+# image = "images/players.png"
+
+# [[home.features]]
+# title = "Intuitive concepts"
+# description = "So intuitive that even a gorilla can get the idea! See this visual explanation:" 
+# image = "images/visual-explanation.png"
