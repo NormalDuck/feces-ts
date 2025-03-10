@@ -1,49 +1,41 @@
 <div align="center">
-    <img src="logo.png" width="600" />
+    <img src="https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/newlogo.png" width="600" />
 </div>
 
 #### _"Fast Entity Component Export System"_
 
 A generalized replication system for [jecs](https://github.com/ukendio/jecs) that allows for easy and fast replication of components.
 
-<br>
-
-### Getting Started
-Example in `examples/replication.luau` for how to use it. Here are some explanations and basic types:
-
-```luau
-feces.init :: (Jecs.World) -> ()
-feces.replicated :: Jecs.Component<{Player} | Player?>
--- feces.replicated is readonly
-```
-`init()` should be obvious as to what it does, if the world is not set there will be warnings in the console.
-
-`replicated` is the component used to mark entities that should be replicated by simply adding it to an entity, or replicate specific components by pairing it with the type of component.
-
-If a list of players or a single player is provided, the component will only replicate to those players. This value is not meant to change at runtime and could cause issues if changed.
+#### [docs](https://neond00m.github.com/feces/) | [pesde](https://pesde.dev/packages/killergg/feces)
 
 <br>
 
-```luau
-feces.getPackets :: () -> (() -> (number?, Packet?))
-feces.getFullPacket :: () -> Packet
-```
-
-`getPackets()` returns an iterator to loop through all the packets at that frame
-
-`getFullPacket()` returns all public entities and components at this frame (useful for giving new players a payload on join)
-
-<br>
+### Examples
 
 ```luau
-feces.applyPackets :: (EntityChanges) -> ()
-feces.filterPackets :: (EntityChanges, ...: component<any>) -> ({ entity<any> }, { component<any> })
+local entity = world:entity()
+local Transform = world:component()
+world:add(entity, Transform)
+
+-- replicate all the components to all players
+world:add(entity, feces.replicated)
+
+-- replicate only the Transform component to all players
+world:add(entity, pair(feces.replicated, Transform)) 
+
+-- replicate all components to a specific player
+world:set(entity, feces.replicated, Player1)
+
+-- replicate only the Transform component to a table of players
+world:set(entity, pair(feces.replicated, Transform), {
+    Player1, Player2
+})
+
+-- replicate all components to any player except Player1
+world:add(entity, feces.replicated, function(player)
+    return player ~= Player1
+end
 ```
-
-`applyPackets()` applies the packets to the world
-
-`filterPackets()` filters the packets to only the components you want to replicate
-
 
 <br>
 
