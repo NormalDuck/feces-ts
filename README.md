@@ -6,7 +6,7 @@
 
 A generalized replication system for [jecs](https://github.com/ukendio/jecs) that allows for easy and fast replication of components.
 
-#### [docs](https://neond00m.github.com/feces/) | [pesde](https://pesde.dev/packages/killergg/feces)
+#### [docs](https://neond00m.github.io/feces/) | [pesde](https://pesde.dev/packages/killergg/feces)
 
 <br>
 
@@ -34,7 +34,7 @@ world:set(entity, pair(feces.replicated, Transform), {
 -- replicate all components to any player except Player1
 world:add(entity, feces.replicated, function(player)
     return player ~= Player1
-end
+end)
 ```
 
 <br>

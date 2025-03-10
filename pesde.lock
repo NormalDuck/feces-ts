@@ -1,5 +1,5 @@
 name = "killergg/feces"
-version = "1.0.0-rc.4"
+version = "1.0.0"
 target = "roblox"
 
 [graph."0x5eal/unzip"."0.1.0 luau"]

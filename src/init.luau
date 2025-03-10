@@ -1,8 +1,8 @@
 --!strict
 --!optimize 2
 --[=[
-    @class feces
-    The feces library for replicating jecs entities and components.
+	@class feces
+	The feces library for replicating jecs entities and components.
 ]=]
 local Players = game:GetService("Players")
 local jecs = require("../roblox_packages/jecs")
@@ -26,15 +26,9 @@ local DELETE_VALUE: deleteValue = "__d"
 type PlayerObject = Player? | { Player } | (Player) -> ()
 
 --[=[ 
-    @within feces
-    @interface playerChanges
-    @field value { [Entity]: any }
-    @field special { [Entity]: deleteValue | nilValue }
-]=]
-
---[=[ 
-    @within feces
-    @type changes { [Component]: { [Player]: playerChanges } }
+	@within feces
+	@type changes { [Component]: { [Player]: { value: { [Entity]: any }, special: { [Entity]: deleteValue | nilValue } } } }
+	How changes are represented and returned from [`delta()`](/api/feces#delta).
 ]=]
 type changes = {
 	[Component]: {
@@ -45,7 +39,7 @@ type changes = {
 	}
 }
 --[=[
-	@interface deleted { [Player]: { Entity } }
+	@type deleted { [Player]: { Entity } }
 	@within feces
 	How deleted entities are represented.
 ]=]
@@ -53,14 +47,9 @@ type deleted = {
 	[Player]: { Entity }
 }
 --[=[
-	@type applyable {
-			[Component]: {
-				value: { [Entity]: any },
-				special: { [Entity]: deleteValue | nilValue }
-			}
-		} & { __d: { Entity }}
+	@type applyable { [Component]: { value: { [Entity]: any }, special: { [Entity]: deleteValue | nilValue } } } & { __d: { Entity } }
 	@within feces
-    Funkier type for how applyable changed should be formated.
+	Funkier type for how applyable changes should be formated.
 ]=]
 type applyable = {
 	[Component]: {
@@ -75,7 +64,7 @@ export type feces = {
 
 	-- gets the entity deletions to replicate
 	full: () -> applyable, -- gets all currently replicating components
-	group: (changes, deleted) -> { [Player]: applyable },
+	group: (changes, deleted?) -> { [Player]: applyable },
 	
 	-- hooks into applying replication
 	added: ((Entity) -> nil),
@@ -91,8 +80,8 @@ local queries = {
 
 --[=[
 	@prop replicated Component
-    @within feces
-    The feces library for replicating jecs entities and components.
+	@within feces
+	The feces library for replicating jecs entities and components.
 ]=]
 local added, changed, deleted = nil, nil, nil
 local previous: { [Component]: { [Entity]: any | "__n" }} = {}
@@ -139,18 +128,18 @@ local function deepEquals(a: any, b: any): boolean
 	return true
 end
 
-local function diffComponent(previous: any, current: any): nilValue | any | {}?
+local function diffComponent(prevValue: any, current: any): nilValue | any | {}?
 	if current == nil then
-		return if previous == NIL_VALUE then nil else NIL_VALUE
+		return if prevValue == NIL_VALUE then nil else NIL_VALUE
 	end
-	if previous == nil then
+	if prevValue == nil then
 		return current
 	end
 
-	if typeof(previous) ~= typeof(current) then
-		return if previous == current then nil else current
+	if typeof(prevValue) ~= typeof(current) then
+		return if prevValue == current then nil else current
 	end
-	return if deepEquals(previous, current) then nil else current
+	return if deepEquals(prevValue, current) then nil else current
 end
 
 local function fill(changes: changes, comp: Component, ent: Entity, value: any,  players: PlayerObject)
@@ -264,15 +253,15 @@ end
 -- PUBLIC FUNCTIONS
 
 --[=[
-    @within feces
-    Applies changes to the world by taking in the [`applyable`](/api/feces#applyable) type and editing the world. 
-    ```lua
-    feces.apply({
+	@within feces
+	Applies changes to the world by taking in the [`applyable`](/api/feces#applyable) type and editing the world. 
+	```lua
+	feces.apply({
 		[someComponent] = {
 			[someForeignEntity] = someValue,
 		}
 	})
-    ```
+	```
 ]=]
 function feces.apply(
 	delta: applyable
@@ -342,12 +331,12 @@ function feces.apply(
 	end
 end
 --[=[
-    @within feces
-    Gets the world changes from the last time it was called.
-    ```lua
-    local changedComponents, deletedEntities = feces.delta()
+	@within feces
+	Gets the world changes from the last time it was called.
+	```lua
+	local changedComponents, deletedEntities = feces.delta()
 	-- ... replicate however you'd like or see the examples [here](/docs/setup)
-    ```
+	```
 ]=]
 function feces.delta(): (changes, deleted)
 	local changes: changes = {}
@@ -380,14 +369,12 @@ function feces.delta(): (changes, deleted)
 				end
 
 				previous[component] = previous[component] or {}
-				print("DELETING FROM PREVIOUS", entity, component)
 				previous[component][entity] = nil
 			end
 		end
 		
 		world:set(component, onRemove, function(id)
 			if id == entity :: jecs.Entity and not deleted[id :: Entity] then
-				print("component removed", id, component)
 				reconcile(changes, playerObject, id :: Entity, component, DELETE_VALUE)
 			end
 		end)
@@ -396,18 +383,18 @@ function feces.delta(): (changes, deleted)
 	return changes, deleted
 end
 --[=[
-    @within feces
-    Reformats the results of [`delta`](/api/feces#delta) into an easier format to replicate.
+	@within feces
+	Reformats the results of [`delta()`](/api/feces#delta) into an easier format to replicate.
 	Not optimal, but recommended if performance of feces-replicated entities is not a concern.
-    ```lua
-    local dataByPlayer = feces.group(feces.delta())
+	```lua
+	local dataByPlayer = feces.group(feces.delta())
 	for player, packet in dataByPlayer do
 		someRemote:FireClient(player, packet)
 	end
 	-- see more of this example [here](/docs/setup#simple)
-    ```
+	```
 ]=]
-function feces.group(changes: changes, deleted: deleted): { [Player]: applyable }
+function feces.group(changes: changes, deleted: deleted?): { [Player]: applyable }
 	local packets: { [Player]: applyable } = {}
 
 	for component, players in changes do
@@ -423,23 +410,25 @@ function feces.group(changes: changes, deleted: deleted): { [Player]: applyable 
 		end
 	end
 
-	for player, entities in deleted do
-		packets[player] = packets[player] or {__d = {}}
-		packets[player].__d = entities
+	if deleted then
+		for player, entities in deleted do
+			packets[player] = packets[player] or {__d = {}}
+			packets[player].__d = entities
+		end
 	end
 	
 	return packets
 end
 --[=[
-    @within feces
-    Gets all the currently replicating component and entity values.
+	@within feces
+	Gets all the currently replicating component and entity values.
 	:::tip
 	This is useful for providing payloads to new players when they first join a server.
 	:::
-    ```lua
-    local changedComponents = feces.full()
+	```lua
+	local changedComponents = feces.full()
 	-- ... replicate however you'd like or see the examples [here](/docs/setup)
-    ```
+	```
 ]=]
 function feces.full(): applyable
 	local data = {} :: applyable
@@ -459,43 +448,43 @@ function feces.full(): applyable
 	return data
 end
 --[=[
-    @within feces
-	Adds a callback for when an entity is added to the world through [`feces.apply()`](/api/feces#apply).
+	@within feces
+	Adds a callback for when an entity is added to the world through [`apply()`](/api/feces#apply).
 	Called *after* **a** (not all) component value is set to a newly replicated entity.
-    ```lua
-    feces.added(function(entity)
-        print("entity added", entity)
-    end)
-    ```
+	```lua
+	feces.added(function(entity)
+		print("entity added", entity)
+	end)
+	```
 	See how you might use this [here](/docs/hooks).
 ]=]
 function feces.added(callback: (Entity) -> nil)
 	added = callback
 end
 --[=[
-    @within feces
-	Adds a callback for when a component value is changed in the world through [`feces.apply()`](/api/feces#apply).  
+	@within feces
+	Adds a callback for when a component value is changed in the world through [`apply()`](/api/feces#apply).  
 	Called *before* the component in question is changed, deleted, or set to `nil`.
-    ```lua
-    feces.changed(function(entity, component, value)
+	```lua
+	feces.changed(function(entity, component, value)
 		local previous = world:get(entity, component)
-        print("component changed", component, previous, "->", value)
-    end)
-    ```
+		print("component changed", component, previous, "->", value)
+	end)
+	```
 	See how you might use this [here](/docs/hooks).
 ]=]
 function feces.changed(callback: (Entity, Component) -> nil)
 	changed = callback
 end
 --[=[
-    @within feces
-	Adds a callback for when an entity is deleted in the world through [`feces.apply()`](/api/feces#apply).   
+	@within feces
+	Adds a callback for when an entity is deleted in the world through [`apply()`](/api/feces#apply).   
 	Called *before* the entity in question is deleted, allowing hooks to get component values and cleanup.
-    ```lua
-    feces.deleted(function(entity)
-        print("entity deleted", entity)
-    end)
-    ```
+	```lua
+	feces.deleted(function(entity)
+		print("entity deleted", entity)
+	end)
+	```
 	See how you might use this [here](/docs/hooks).
 ]=]
 function feces.deleted(callback: (Entity) -> nil)
