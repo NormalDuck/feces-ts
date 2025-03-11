@@ -39,11 +39,11 @@ type changes = {
 	}
 }
 --[=[
-	@type deleted { [Player]: { Entity } }
+	@type deletes { [Player]: { Entity } }
 	@within feces
 	How deleted entities are represented.
 ]=]
-type deleted = {
+type deletes = {
 	[Player]: { Entity }
 }
 --[=[
@@ -60,11 +60,11 @@ type applyable = {
 
 export type feces = {
 	apply: (applyable) -> nil, -- applies component changes to world
-	delta: () -> (changes, deleted), -- gets the component changes to replicate
+	delta: () -> (changes, deletes), -- gets the component changes to replicate
 
 	-- gets the entity deletions to replicate
 	full: () -> applyable, -- gets all currently replicating components
-	group: (changes, deleted?) -> { [Player]: applyable },
+	group: (changes, deletes?) -> { [Player]: applyable },
 	
 	-- hooks into applying replication
 	added: ((Entity) -> nil),
@@ -290,6 +290,9 @@ function feces.apply(
 		for entity: Entity, value in entities.value do
 			if not refs[`repl{entity}`] then
 				local id = ref(`repl{entity}`)
+				if changed then
+					changed(id, component, value)
+				end
 				world:set(id, component, value)
 				if added then
 					added(id)
@@ -338,9 +341,9 @@ end
 	-- ... replicate however you'd like or see the examples [here](/docs/setup)
 	```
 ]=]
-function feces.delta(): (changes, deleted)
+function feces.delta(): (changes, deletes)
 	local changes: changes = {}
-	local deleted: deleted = {}
+	local deleted: deletes = {}
 	
 	replicating(function(component, playerObject, entity: Entity, value, replicatedId)
 		reconcile(changes, playerObject, entity, component, value)
@@ -394,7 +397,7 @@ end
 	-- see more of this example [here](/docs/setup#simple)
 	```
 ]=]
-function feces.group(changes: changes, deleted: deleted?): { [Player]: applyable }
+function feces.group(changes: changes, deleted: deletes?): { [Player]: applyable }
 	local packets: { [Player]: applyable } = {}
 
 	for component, players in changes do
