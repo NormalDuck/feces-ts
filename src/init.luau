@@ -68,7 +68,8 @@ export type feces = {
 	
 	-- hooks into applying replication
 	added: ((Entity) -> nil),
-	changed: ((Entity, Component) -> nil),
+	changed: ((Entity, Component, any) -> nil),
+	removed: ((Entity, Component) -> nil),
 	deleted: ((Entity) -> nil)
 }
 
@@ -83,7 +84,7 @@ local queries = {
 	@within feces
 	The feces library for replicating jecs entities and components.
 ]=]
-local added, changed, deleted = nil, nil, nil
+local added, changed, removed, deleted = nil, nil, nil, nil
 local previous: { [Component]: { [Entity]: any | "__n" }} = {}
 local feces = {
 	replicated = replicated,
@@ -287,6 +288,8 @@ function feces.apply(
 			continue
 		end
 		
+		local newEntities = {}
+
 		for entity: Entity, value in entities.value do
 			if not refs[`repl{entity}`] then
 				local id = ref(`repl{entity}`)
@@ -295,7 +298,7 @@ function feces.apply(
 				end
 				world:set(id, component, value)
 				if added then
-					added(id)
+					newEntities[id] = true
 				end
 			else
 				local id = ref(`repl{entity}`)
@@ -308,28 +311,27 @@ function feces.apply(
 
 		for entity: Entity, value in entities.special do
 			local id = ref(`repl{entity}`)
-			if changed then -- here to preview any changes
-				changed(
-					id, component,
-					if value == NIL_VALUE or value == DELETE_VALUE
-					then nil else value
-				)
-			end
 
 			if value == DELETE_VALUE then
+				if removed then
+					removed(id, component)
+				end
 				world:remove(id, component)
 				continue
 			end
+			
+			local newValue = if value == NIL_VALUE then nil else value
+			if changed then
+				changed(id, component, newValue)
+			end
 
-			--or we could put it here to let them see if it was deleted
+			world:set(id, component, newValue)
+		end
 
-			world:set(id, component, 
-				if value == NIL_VALUE
-					then nil 
-					else value
-			)
-
-			--here to get the new value and see if deleted, but can't observe old value any more
+		if added then
+			for id, _ in newEntities do
+				added(id)
+			end
 		end
 	end
 end
@@ -454,12 +456,7 @@ end
 	@within feces
 	Adds a callback for when an entity is added to the world through [`apply()`](/api/feces#apply).
 	Called *after* **a** (not all) component value is set to a newly replicated entity.
-	```lua
-	feces.added(function(entity)
-		print("entity added", entity)
-	end)
-	```
-	See how you might use this [here](/docs/hooks).
+	See how you might use this [here](/docs/hooks#added).
 ]=]
 function feces.added(callback: (Entity) -> nil)
 	added = callback
@@ -468,27 +465,25 @@ end
 	@within feces
 	Adds a callback for when a component value is changed in the world through [`apply()`](/api/feces#apply).  
 	Called *before* the component in question is changed, deleted, or set to `nil`.
-	```lua
-	feces.changed(function(entity, component, value)
-		local previous = world:get(entity, component)
-		print("component changed", component, previous, "->", value)
-	end)
-	```
-	See how you might use this [here](/docs/hooks).
+	See how you might use this [here](/docs/hooks#changed).
 ]=]
-function feces.changed(callback: (Entity, Component) -> nil)
+function feces.changed(callback: (Entity, Component, any) -> nil)
 	changed = callback
 end
 --[=[
 	@within feces
+	Adds a callback for when a component is removed in the world through [`apply()`](/api/feces#apply).   
+	Called *before* the component in question is removed.
+	See how you might use this [here](/docs/hooks#removed).
+]=]
+function feces.removed(callback: (Entity, Component) -> nil)
+	removed = callback
+end
+--[=[
+	@within feces
 	Adds a callback for when an entity is deleted in the world through [`apply()`](/api/feces#apply).   
-	Called *before* the entity in question is deleted, allowing hooks to get component values and cleanup.
-	```lua
-	feces.deleted(function(entity)
-		print("entity deleted", entity)
-	end)
-	```
-	See how you might use this [here](/docs/hooks).
+	Called *before* the entity in question is deleted, allowing hooks to get component values and clean up.
+	See how you might use this [here](/docs/hooks#deleted).
 ]=]
 function feces.deleted(callback: (Entity) -> nil)
 	deleted = callback
