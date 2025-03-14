@@ -42,5 +42,5 @@ end)
 ### Installation
 Either copy the code manually or use pesde:
 ```sh
-pesde add neond00m/feces
+pesde add killergg/feces
 ```
