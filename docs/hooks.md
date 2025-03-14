@@ -13,26 +13,32 @@ Only one callback can be set at a time and calling again will overwrite the prev
 If you'd like a signal or some sort of scheduler please set that up on your own.
 :::
 
-## Hook Methods
-
-#### [`added()`](/api/feces#added)
+## [`added()`](/api/feces#added)
 
 Hooks onto when a new **entity** is replicated to the world, not for new components.
-The added callback is called *after* the first component value reveived is set to
+The added callback is called *after* all the components received are set to 
 a newly replicated entity. This is because there has to be at least one replicating
 component under an entity for it to be added through feces.
 
-#### [`changed()`](/api/feces#changed)
+:::warning
+This added hook will be called on entities *after* calling changed hooks on each of their components, so do not expect changed to happen after added.
+:::
+
+```lua
+feces.added(function(entity)
+    if world:has(entity, PlayerTag) then
+        print("new player added", entity)
+        return
+    end
+    print("entity added", entity)
+end)
+```
+
+## [`changed()`](/api/feces#changed)
 
 Hooks onto when a **component** value is changed in the world. Called *before* the component's new value is set in the world. This means that you can get whether the entity has the component or not, and the previous value of the component.
 
-This also allows you to check for component deletions, values being set to `nil`, and compare previous and current values. The callback will pass in `nil` to `value` if the component was removed or the value was set to nil.
-
-:::tip
-To know for sure if a component was removed and not set to nil, you would need to use the
-context of your own game since the hooks aren't given that information. 
-(Maybe we'll add a removed() hook in the future)
-:::
+This also allows you to check for values being set to `nil` and compare previous and current values.
 
 ```lua
 feces.changed(function(entity, component, value)
@@ -42,14 +48,31 @@ feces.changed(function(entity, component, value)
         return
     end
     local previous = world:get(entity, component)
-    if value == nil then
-        print("component removed or set to nil", component)
-        return
-    end
     print("component changed", component, previous, "->", value)
 end)
 ```
 
-#### [`deleted()`](/api/feces#deleted)
+## [`removed()`](/api/feces#removed)
 
-Hooks onto when an **entity** is deleted in the world. This is called *before* the entity is deleted, allowing you to get the component values and cleanup, fairly straightforward.
+Hooks onto when a **component** is removed from the world. Called *before* removing the component from the world. This means that you can get the previous value of the component.
+
+```lua
+feces.removed(function(entity, component)
+    local previous = world:get(entity, component)
+    print("component removed", component, "had the value of", previous)
+end)
+```
+
+## [`deleted()`](/api/feces#deleted)
+
+Hooks onto when an **entity** is deleted in the world. This is called *before* the entity is deleted, allowing you to get the component values and clean up, fairly straightforward.
+
+```lua
+feces.deleted(function(entity)
+    if world:has(entity, PlayerTag) then
+        print("player has left the game", entity)
+        return
+    end
+    print("entity deleted", entity)
+end)
+```

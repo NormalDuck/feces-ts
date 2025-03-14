@@ -15,7 +15,7 @@ const FEATURES = [
         One line to replicate either a specific component or a whole entity!
         <br />
         <br />
-        In the example you can see that we use show how both methods would work, though in reality the
+        In the example you can see that we show how both methods would work, though in reality the
         pairs method is redundant if you are also adding the replicated component straight to the entity.
         <br />
         <br />
