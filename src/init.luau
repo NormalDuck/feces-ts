@@ -5,10 +5,10 @@
 	The feces library for replicating jecs entities and components.
 ]=]
 local Players = game:GetService("Players")
-local jecs = require("../roblox_packages/jecs")
-local ref = require("../roblox_packages/ref")
-local refs = require("../roblox_packages/refs")
-local world = require("../roblox_packages/world")
+local jecs = require("./roblox_packages/jecs")
+local ref = require("./roblox_packages/ref")
+local refs = require("./roblox_packages/refs")
+local world = require("./roblox_packages/world")
 
 local pair = jecs.pair
 local __ = jecs.Wildcard
