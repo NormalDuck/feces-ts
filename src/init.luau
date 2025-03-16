@@ -8,7 +8,6 @@ local Players = game:GetService("Players")
 local jecs = require("./roblox_packages/jecs")
 local ref = require("./roblox_packages/ref")
 local refs = require("./roblox_packages/refs")
-local world = require("./roblox_packages/world")
 
 local pair = jecs.pair
 local __ = jecs.Wildcard
@@ -88,7 +87,8 @@ local added, changed, removed, deleted = nil, nil, nil, nil
 local previous: { [Component]: { [Entity]: any | "__n" }} = {}
 local feces = {
 	replicated = replicated,
-	queries = queries
+	queries = queries,
+	world = nil
 }
 
 -- PRIVATE FUNCTIONS
@@ -178,6 +178,12 @@ end
 
 local function replicating(callback: (Component, PlayerObject, Entity, any, Component) -> nil)
 	local replicated = feces.replicated
+	local world = feces.world
+	if not world then
+		warn("Could not find world in feces, please set it")
+		return
+	end
+
 	for _, archetype in queries.single:archetypes() do
 		local entities = archetype.entities
 		local columns = archetype.columns
@@ -267,6 +273,12 @@ end
 function feces.apply(
 	delta: applyable
 )
+	local world = feces.world
+	if not world then
+		warn("Could not find world in feces, please set it")
+		return
+	end
+
 	if not delta then
 		warn("NO APPLYABLE DATA RECEIVED")
 		return
@@ -344,6 +356,12 @@ end
 	```
 ]=]
 function feces.delta(): (changes, deletes)
+	local world = feces.world
+	if not world then
+		warn("Could not find world in feces, please set it")
+		return
+	end
+
 	local changes: changes = {}
 	local deleted: deletes = {}
 	
