@@ -100,7 +100,7 @@ function HomepageHeader() {
       <div className="container">
         <h1 className="hero__title">
           <img
-            src="https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/newlogo.png"
+            src="https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/thelogo.png"
             className="bigLogo"
             alt="feces"
           />
