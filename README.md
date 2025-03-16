@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/newlogo.png" width="600" />
+    <img src="https://raw.githubusercontent.com/NeonD00m/feces/refs/heads/main/images/feceslogo.png" width="600" />
 </div>
 
 #### _"Fast Entity Component Export System"_
