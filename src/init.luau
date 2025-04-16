@@ -5,13 +5,12 @@
 	The feces library for replicating jecs entities and components.
 ]=]
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local isClient = RunService:IsClient()
 local jecs = require("./roblox_packages/jecs")
-local ref = require("./roblox_packages/ref")
-local refs = require("./roblox_packages/refs")
 
 local pair = jecs.pair
 local __ = jecs.Wildcard
-local onRemove = jecs.OnRemove
 
 type Entity = jecs.Entity & number
 type Component<T = any> = jecs.Entity<T> & number
@@ -57,41 +56,49 @@ type applyable = {
 	}
 } & { __d: { Entity }}
 
-export type feces = {
-	apply: (applyable) -> nil, -- applies component changes to world
-	delta: () -> (changes, deletes), -- gets the component changes to replicate
+export type lib = {
+	new: (jecs.World) -> feces,
+	group: (changes, deletes?) -> { [Player]: applyable },
+}
+
+export type feces = lib & {
+	replicated: jecs.Component,
+	queries: {
+		single: jecs.Query,
+		pair: jecs.Query,
+	},
+	world: jecs.World,
+	pendingChanges: changes,
+	pendingDeletes: deletes,
+	refs: { [string]: Entity },
+
+	ref: (self: feces, key: string?) -> Entity,
+	replicating: (self: feces, (Component, PlayerObject, Entity, any, Component) -> nil) -> nil,
+
+	apply: (self: feces, applyable) -> nil, -- applies component changes to world
+	delta: (self: feces) -> (changes, deletes), -- gets the component changes to replicate
 
 	-- gets the entity deletions to replicate
-	full: () -> applyable, -- gets all currently replicating components
+	full: (self: feces) -> applyable, -- gets all currently replicating components
 	group: (changes, deletes?) -> { [Player]: applyable },
 	
 	-- hooks into applying replication
-	added: ((Entity) -> nil),
-	changed: ((Entity, Component, any) -> nil),
-	removed: ((Entity, Component) -> nil),
-	deleted: ((Entity) -> nil)
+	added: (self: feces, (Entity) -> nil) -> nil,
+	changed: (self: feces, (Entity, Component, any) -> nil) -> nil,
+	removed: (self: feces, (Entity, Component) -> nil) -> nil,
+	deleted: (self: feces, (Entity) -> nil) -> nil,
+    hooks: {
+        added: ((Entity) -> nil)?,
+	    changed: ((Entity, Component, any) -> nil)?,
+	    removed: ((Entity, Component) -> nil)?,
+	    deleted: ((Entity) -> nil)?
+    }
 }
 
-local replicated = world:component() :: Component<PlayerObject>
-local queries = {
-	single = world:query(replicated):cached(),
-	pair = world:query(pair(replicated, __)):cached(),
-}
+local lib = {}
 
---[=[
-	@prop replicated Component
-	@within feces
-	The feces library for replicating jecs entities and components.
-]=]
-local added, changed, removed, deleted = nil, nil, nil, nil
-local previous: { [Component]: { [Entity]: any | "__n" }} = {}
-local feces = {
-	replicated = replicated,
-	queries = queries,
-	world = nil
-}
-
--- PRIVATE FUNCTIONS
+local availablePlayers = {}
+local playerConnections = {}
 
 local function getPlayers(info: PlayerObject): { Player? }
 	if typeof(info) == "table" then
@@ -108,45 +115,12 @@ local function getPlayers(info: PlayerObject): { Player? }
 		return result
 	end
 	
-	return { info }
+	return if info then { info } else availablePlayers
 end
 
-local function deepEquals(a: any, b: any): boolean
-	if type(a) ~= "table" or type(b) ~= "table" then
-		return a == b
-	end
-
-	for key, value in a do
-		if not deepEquals(value, b[key]) then
-			return false
-		end
-	end
-	for key, value in b do
-		if not deepEquals(value, a[key]) then
-			return false
-		end
-	end
-	return true
-end
-
-local function diffComponent(prevValue: any, current: any): nilValue | any | {}?
-	if current == nil then
-		return if prevValue == NIL_VALUE then nil else NIL_VALUE
-	end
-	if prevValue == nil then
-		return current
-	end
-
-	if typeof(prevValue) ~= typeof(current) then
-		return if prevValue == current then nil else current
-	end
-	return if deepEquals(prevValue, current) then nil else current
-end
-
-local function fill(changes: changes, comp: Component, ent: Entity, value: any,  players: PlayerObject)
+local function fill(changes: changes, comp: Component, ent: Entity, value: any, players: { Player? })
 	changes[comp] = changes[comp] or {}
-	
-	for _, player in getPlayers(players) do
+	for _, player in players do
 		if not player then
 			continue
 		end
@@ -160,42 +134,35 @@ local function fill(changes: changes, comp: Component, ent: Entity, value: any, 
 	end
 end
 
-local function reconcile(changes: changes, player: PlayerObject, entity: Entity, component: Component, value: any)
-	previous[component] = previous[component] or {}
-	local diff = diffComponent(previous[component][entity], value)
-	if not diff then
-		return
+local function ref(self: feces, key: string?): Entity
+	local world = self.world
+	if not key then
+		return world:entity()
 	end
 
-	previous[component][entity] = if diff == DELETE_VALUE then nil else diff
-	if player == nil then
-		fill(changes, component, entity, diff, Players:GetPlayers())
-		return
+	local refs = self.refs
+	local entity = refs[key]
+	if not entity then
+		entity = world:entity()
+		refs[key] = entity
 	end
 	
-	fill(changes, component, entity, diff, player)
+	return entity
 end
 
-local function replicating(callback: (Component, PlayerObject, Entity, any, Component) -> nil)
-	local replicated = feces.replicated
-	local world = feces.world
-	if not world then
-		warn("Could not find world in feces, please set it")
-		return
-	end
-
-	for _, archetype in queries.single:archetypes() do
+local function replicating(self: feces, callback: (Component, PlayerObject, Entity, any, Component) -> nil)
+	for _, archetype in self.queries.single:archetypes() do
 		local entities = archetype.entities
 		local columns = archetype.columns
 		local types = archetype.types
-		local record = archetype.records[replicated]
+		local record = archetype.records[self.replicated]
 		if not record then
 			continue
 		end
 		
 		local playerColumn = columns[record]
 		for key, id in types do
-			if id == replicated :: number then
+			if id == self.replicated :: number then
 				continue
 			end
 			local column = columns[key]
@@ -210,13 +177,13 @@ local function replicating(callback: (Component, PlayerObject, Entity, any, Comp
 					player,
 					entity :: Entity,
 					column[row],
-					replicated
+					self.replicated
 				)
 			end
 		end
 	end
 
-	for _, archetype in queries.pair:archetypes() do
+	for _, archetype in self.queries.pair:archetypes() do
 		local entities: { number } = archetype.entities
 		local types = archetype.types
 		local records = archetype.records
@@ -226,7 +193,7 @@ local function replicating(callback: (Component, PlayerObject, Entity, any, Comp
 				continue
 			end
 
-			if jecs.pair_first(world, id) ~= replicated :: number then
+			if jecs.pair_first(self.world, id) ~= self.replicated :: number then
 				continue -- it's a pair but the first component isn't replicated e.g pair(someComponent, someOtherComponent) instead of pair(replicated, someOtherComponent)
 			end
 
@@ -236,9 +203,9 @@ local function replicating(callback: (Component, PlayerObject, Entity, any, Comp
 			end
 
 			local playerColumn = archetype.columns[record]
-			local component = jecs.pair_second(world, id)
+			local component = jecs.pair_second(self.world, id)
 			for row, entity in entities do
-				if not world:has(entity :: Entity, component :: Component) then
+				if not self.world:has(entity :: Entity, component :: Component) then
 					continue
 				end
 
@@ -246,7 +213,7 @@ local function replicating(callback: (Component, PlayerObject, Entity, any, Comp
 					component :: Component,
 					playerColumn[row],
 					entity :: Entity,
-					world:get(
+					self.world:get(
 						entity :: Entity,
 						component :: Component
 					),
@@ -256,29 +223,18 @@ local function replicating(callback: (Component, PlayerObject, Entity, any, Comp
 		end
 	end
 end
-
--- PUBLIC FUNCTIONS
-
 --[=[
 	@within feces
 	Applies changes to the world by taking in the [`applyable`](/api/feces#applyable) type and editing the world. 
 	```lua
-	feces.apply({
+	feces:apply({
 		[someComponent] = {
 			[someForeignEntity] = someValue,
 		}
 	})
 	```
 ]=]
-function feces.apply(
-	delta: applyable
-)
-	local world = feces.world
-	if not world then
-		warn("Could not find world in feces, please set it")
-		return
-	end
-
+local function apply(self: feces,delta: applyable)
 	if not delta then
 		warn("NO APPLYABLE DATA RECEIVED")
 		return
@@ -291,11 +247,11 @@ function feces.apply(
 		
 		if component == DELETE_VALUE then
 			for _, entity in entities do
-				local id = ref(`repl{entity}`)
-				if deleted then
-					deleted(id)
+				local id = self:ref(`repl{entity}`)
+				if self.hooks.deleted then
+					self.hooks.deleted(id)
 				end
-				world:delete(id)
+				self.world:delete(id)
 			end
 			continue
 		end
@@ -303,46 +259,46 @@ function feces.apply(
 		local newEntities = {}
 
 		for entity: Entity, value in entities.value do
-			if not refs[`repl{entity}`] then
-				local id = ref(`repl{entity}`)
-				if changed then
-					changed(id, component, value)
+			if not self.refs[`repl{entity}`] then
+				local id = self:ref(`repl{entity}`)
+				if self.hooks.changed then
+					self.hooks.changed(id, component, value)
 				end
-				world:set(id, component, value)
-				if added then
+				self.world:set(id, component, value)
+				if self.hooks.added then
 					newEntities[id] = true
 				end
 			else
-				local id = ref(`repl{entity}`)
-				if changed then
-					changed(id, component, value)
+				local id = self:ref(`repl{entity}`)
+				if self.hooks.changed then
+					self.hooks.changed(id, component, value)
 				end
-				world:set(id, component, value)
+				self.world:set(id, component, value)
 			end
 		end
 
 		for entity: Entity, value in entities.special do
-			local id = ref(`repl{entity}`)
+			local id = self:ref(`repl{entity}`)
 
 			if value == DELETE_VALUE then
-				if removed then
-					removed(id, component)
+				if self.hooks.removed then
+					self.hooks.removed(id, component)
 				end
-				world:remove(id, component)
+				self.world:remove(id, component)
 				continue
 			end
 			
 			local newValue = if value == NIL_VALUE then nil else value
-			if changed then
-				changed(id, component, newValue)
+			if self.hooks.changed then
+				self.hooks.changed(id, component, newValue)
 			end
 
-			world:set(id, component, newValue)
+			self.world:set(id, component, newValue)
 		end
 
-		if added then
+		if self.hooks.added then
 			for id, _ in newEntities do
-				added(id)
+				self.hooks.added(id)
 			end
 		end
 	end
@@ -351,57 +307,14 @@ end
 	@within feces
 	Gets the world changes from the last time it was called.
 	```lua
-	local changedComponents, deletedEntities = feces.delta()
+	local changedComponents, deletedEntities = feces:delta()
 	-- ... replicate however you'd like or see the examples [here](/docs/setup)
 	```
 ]=]
-function feces.delta(): (changes, deletes)
-	local world = feces.world
-	if not world then
-		warn("Could not find world in feces, please set it")
-		return
-	end
-
-	local changes: changes = {}
-	local deleted: deletes = {}
+local function delta(self: feces): (changes, deletes)
+	local changes: changes, deleted: deletes = self.pendingChanges, self.pendingDeletes
 	
-	replicating(function(component, playerObject, entity: Entity, value, replicatedId)
-		reconcile(changes, playerObject, entity, component, value)
-		
-		world:set(replicatedId, onRemove, function(id: jecs.Entity)
-			if id == entity :: jecs.Entity then
-				for _, player in getPlayers(playerObject) do
-					if not player then
-						continue
-					end
-					
-					deleted[player] = id
-				end
-			end
-		end)
-		
-		if next(deleted) then
-			for _, player in getPlayers(playerObject) do
-				if not player then
-					continue
-				end
-				
-				local id = deleted[player]
-				if not id or id ~= entity :: jecs.Entity then
-					continue
-				end
-
-				previous[component] = previous[component] or {}
-				previous[component][entity] = nil
-			end
-		end
-		
-		world:set(component, onRemove, function(id)
-			if id == entity :: jecs.Entity and not deleted[id :: Entity] then
-				reconcile(changes, playerObject, id :: Entity, component, DELETE_VALUE)
-			end
-		end)
-	end)
+	self.pendingChanges, self.pendingDeletes = {}, {}
 	
 	return changes, deleted
 end
@@ -410,14 +323,14 @@ end
 	Reformats the results of [`delta()`](/api/feces#delta) into an easier format to replicate.
 	Not optimal, but recommended if performance of feces-replicated entities is not a concern.
 	```lua
-	local dataByPlayer = feces.group(feces.delta())
+	local dataByPlayer = feces.group(feces:delta())
 	for player, packet in dataByPlayer do
 		someRemote:FireClient(player, packet)
 	end
 	-- see more of this example [here](/docs/setup#simple)
 	```
 ]=]
-function feces.group(changes: changes, deleted: deletes?): { [Player]: applyable }
+local function group(changes: changes, deleted: deletes?): { [Player]: applyable }
 	local packets: { [Player]: applyable } = {}
 
 	for component, players in changes do
@@ -442,6 +355,7 @@ function feces.group(changes: changes, deleted: deletes?): { [Player]: applyable
 	
 	return packets
 end
+lib.group = group
 --[=[
 	@within feces
 	Gets all the currently replicating component and entity values.
@@ -449,14 +363,14 @@ end
 	This is useful for providing payloads to new players when they first join a server.
 	:::
 	```lua
-	local changedComponents = feces.full()
+	local changedComponents = feces:full()
 	-- ... replicate however you'd like or see the examples [here](/docs/setup)
 	```
 ]=]
-function feces.full(): applyable
+local function full(self: feces): applyable
 	local data = {} :: applyable
 
-	replicating(function(component, player, entity, value)
+	self:replicating(function(component, player, entity, value)
 		if player then
 			return -- we only want publicly replicated data
 		end
@@ -476,8 +390,8 @@ end
 	Called *after* **a** (not all) component value is set to a newly replicated entity.
 	See how you might use this [here](/docs/hooks#added).
 ]=]
-function feces.added(callback: (Entity) -> nil)
-	added = callback
+local function added(self: feces, callback: (Entity) -> nil)
+	self.hooks.added = callback
 end
 --[=[
 	@within feces
@@ -485,8 +399,8 @@ end
 	Called *before* the component in question is changed, deleted, or set to `nil`.
 	See how you might use this [here](/docs/hooks#changed).
 ]=]
-function feces.changed(callback: (Entity, Component, any) -> nil)
-	changed = callback
+local function changed(self: feces, callback: (Entity, Component, any) -> nil)
+	self.hooks.changed = callback
 end
 --[=[
 	@within feces
@@ -494,8 +408,8 @@ end
 	Called *before* the component in question is removed.
 	See how you might use this [here](/docs/hooks#removed).
 ]=]
-function feces.removed(callback: (Entity, Component) -> nil)
-	removed = callback
+local function removed(self: feces, callback: (Entity, Component) -> nil)
+	self.hooks.removed = callback
 end
 --[=[
 	@within feces
@@ -503,8 +417,192 @@ end
 	Called *before* the entity in question is deleted, allowing hooks to get component values and clean up.
 	See how you might use this [here](/docs/hooks#deleted).
 ]=]
-function feces.deleted(callback: (Entity) -> nil)
-	deleted = callback
-end	
+local function deleted(self: feces, callback: (Entity) -> nil)
+	self.hooks.deleted = callback
+end
 
-return feces :: typeof(feces)
+-- MEGA SU
+-- convert class structure to axis-like and skilift-like
+-- use component_index to get every registered component in the world and check metatables for when to check if theres a new component
+-- listen to when a component is added, removed and changed via observers and propagate that further into replication
+-- get replication changes
+-- REPLICATE THE DATA!!!
+-- receive the data...
+-- APPLY THE DATAA!!!
+-- make sure that EVERYTHING works!!!! SUPER Important
+
+
+
+function lib.new(world: jecs.World): feces
+	--assume the user has already added observers to the world
+    local replicated = world:component()
+	world:set(replicated, jecs.Name, "replicated")
+    local self = {
+		replicated = replicated,
+		queries = {
+			single = world:query(replicated):cached(),
+			pair = world:query(pair(replicated, __)):cached(),
+		},
+        world = world,
+        pendingChanges = {} :: changes,
+        pendingDeletes = {} :: deletes,
+        hooks = {},
+		refs = {},
+		ref = ref,
+		replicating = replicating,
+		apply = apply,
+		delta = delta,
+		full = full,
+		group = group,
+		added = added,
+		changed = changed,
+		removed = removed,
+		deleted = deleted,
+    } :: any
+	print("NEW FECES!!")
+	if isClient then
+		return self :: feces
+	end
+
+	if next(playerConnections) == nil then
+		availablePlayers = Players:GetPlayers()
+		table.insert(playerConnections, Players.PlayerAdded:Connect(function(player: Player)
+			availablePlayers[`{player.UserId}`]  = player
+		end))
+
+		table.insert(playerConnections, Players.PlayerRemoving:Connect(function(player: Player)
+			availablePlayers[`{player.UserId}`] = nil
+		end))
+	end
+
+	local function fillChanges(entity, value, component)
+		local record = jecs.entity_index_try_get_fast(world.entity_index, entity)
+		if not record then
+			return
+		end
+	
+		local archetype = record.archetype
+		if not archetype then
+			return
+		end		
+
+		local players = getPlayers(archetype.records[replicated])
+		fill(self.pendingChanges, component, entity, if value == DELETE_VALUE then DELETE_VALUE elseif value == nil then NIL_VALUE else value, players :: { Player })
+	end
+
+	local function listen(component)
+		local paired = pair(replicated, component)
+
+		world:added(component, function(entity, value)
+			fillChanges(entity, value, component)
+		end)
+
+		world:changed(component, function(entity, value)
+			fillChanges(entity, value, component)
+		end)
+
+		world:removed(component, function(entity)
+			fillChanges(entity, DELETE_VALUE, component)
+		end)
+	
+		world:added(paired, function(entity, value)
+			fill(
+				self.pendingChanges,
+				component, entity,
+				world:get(entity, component),
+				getPlayers(value) :: { Player }
+			)
+		end)
+	
+		world:removed(paired, function(entity, value)
+			fill(self.pendingChanges, component, entity, DELETE_VALUE, getPlayers(value))
+		end)
+	end
+
+	local function disconnect(component)
+		local paired = pair(replicated, component)
+		local signals = world.signals
+		signals.added[component] = nil
+		signals.emplaced[component] = nil
+		signals.removed[component] = nil
+
+		signals.added[paired] = nil
+		signals.emplaced[paired] = nil
+		signals.removed[paired] = nil
+	end
+
+	local component_index = world.component_index
+	for component in component_index do
+		if component == replicated or (jecs.IS_PAIR(component) and jecs.pair_first(world, component) == replicated) then
+			continue
+		end
+
+		listen(component)
+	end
+
+	setmetatable(component_index, {
+		__newindex = function(tbl, component, value)
+			if component == replicated or (jecs.IS_PAIR(component) and jecs.pair_first(world, component) == replicated) then
+				rawset(tbl, component, value)
+				return
+			end
+
+			local old = rawget(tbl, component)
+			rawset(tbl, component, value)
+
+			if old == nil and value ~= nil then
+				listen(component)
+			elseif old ~= nil and value == nil then
+				disconnect(component)
+			end
+		end,
+		__index = function(tbl, key)
+			return rawget(tbl, key)
+		end
+	})
+
+    world:added(replicated, function(entity, value: PlayerObject)
+		local record = jecs.entity_index_try_get_fast(world.entity_index, entity)
+		if not record then
+			return
+		end
+
+		local archetype = record.archetype
+		if not archetype then
+			return
+		end
+
+		local columns = archetype.columns
+		local row = record.row
+		local types = archetype.types
+        local players = getPlayers(value)
+
+		for key, id in types do
+			if id == replicated then
+				continue
+			end
+
+			local column = columns[key]
+			if not column then
+				continue
+			end
+
+			fill(self.pendingChanges, id, entity, column[row], players)
+		end
+    end)
+
+    world:removed(replicated, function(entity, value)
+		print("REMOVING ENTITY", entity, value)
+        for _, player in getPlayers(value) do
+            if not player then 
+				continue 
+			end
+
+            table.insert(self.pendingDeletes[player], entity)
+        end
+    end)
+
+    return self :: feces
+end
+
+return lib :: lib
