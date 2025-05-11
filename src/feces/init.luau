@@ -7,7 +7,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local isClient = RunService:IsClient()
-local jecs = require("./roblox_packages/jecs")
+local jecs = require(script.Parent.jecs)
 
 local pair = jecs.pair
 local __ = jecs.Wildcard

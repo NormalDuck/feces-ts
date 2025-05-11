@@ -5,3 +5,6 @@
 sourcemap.json
 
 build
+
+node_modules
+out
