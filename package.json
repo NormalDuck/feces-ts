@@ -2,23 +2,26 @@
 	"name": "@rbxts/feces",
 	"version": "0.1.0-rc.0",
 	"description": "Fast Entity Component Export System",
-	"repository": "NormalDuck/feces-ts",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/NormalDuck/feces-ts.git"
+	},
 	"license": "MIT",
 	"main": "out/init.luau",
 	"types": "out/index.d.ts",
 	"scripts": {
 		"build": "rbxtsc",
-    	"watch": "rbxtsc -w",
-    	"prepublishOnly": "npm run build"
+		"watch": "rbxtsc -w",
+		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
 		"@rbxts/jecs": "^0.5.5"
 	},
-	  "files": [
-	    "out",
-    	"!**/*.tsbuildinfo"
-  	],    
-  	"devDependencies": {
+	"files": [
+		"out",
+		"!**/*.tsbuildinfo"
+	],
+	"devDependencies": {
 		"@rbxts/compiler-types": "3.0.0-types.0",
 		"@rbxts/types": "^1.0.811",
 		"@typescript-eslint/eslint-plugin": "^7.18.0",
