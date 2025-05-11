@@ -605,4 +605,4 @@ function lib.new(world: jecs.World): feces
     return self :: feces
 end
 
-return lib :: lib
+return { feces = lib :: lib, group = group }
