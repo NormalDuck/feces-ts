@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local isClient = RunService:IsClient()
 local jecs = require(script.Parent.jecs)
+local observer = require(script.Parent.observer)
 
 local pair = jecs.pair
 local __ = jecs.Wildcard
@@ -433,8 +434,9 @@ end
 
 
 
-function lib.new(world: jecs.World): feces
+function lib.new(originalWorld: jecs.World): feces
 	--assume the user has already added observers to the world
+	local world = observer(originalWorld)
     local replicated = world:component()
 	world:set(replicated, jecs.Name, "replicated")
     local self = {
