@@ -27,6 +27,7 @@ declare namespace Feces {
   >;
   function group(changes: changes, deletes?: deletes): Map<Player, applyable>;
   class feces {
+    constructor(world: World);
     static group(
       this: void,
       changes: changes,
