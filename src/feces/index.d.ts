@@ -33,7 +33,7 @@ declare namespace Feces {
       changes: changes,
       deletes?: deletes,
     ): Map<Player, applyable>;
-    replicated: Entity;
+    replicated: Entity<PlayerObject>;
     queries: {
       single: Query<[unknown]>;
       pair: Query<[unknown]>;

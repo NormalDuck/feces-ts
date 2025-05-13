@@ -1,6 +1,6 @@
 {
 	"name": "@rbxts/feces",
-	"version": "0.1.0-rc.4",
+	"version": "0.1.0-rc.5",
 	"description": "Fast Entity Component Export System",
 	"repository": {
 		"type": "git",
@@ -18,7 +18,7 @@
 		"access": "public"
 	},
 	"peerDependencies": {
-		"@rbxts/jecs": "^0.6.0"
+		"@rbxts/jecs": "^0.6.0 || https://github.com/NormalDuck/jecs"
 	},
 	"files": [
 		"out",
