@@ -18,7 +18,7 @@
 		"access": "public"
 	},
 	"peerDependencies": {
-		"@rbxts/jecs": "^0.6.0 || https://github.com/NormalDuck/jecs"
+		"@rbxts/jecs": "^0.6.0"
 	},
 	"files": [
 		"out",
@@ -36,5 +36,8 @@
 		"prettier": "^3.3.3",
 		"roblox-ts": "^3.0.0",
 		"typescript": "~5.5.4"
+	},
+	"optionalDependencies": {
+		"@rbxts/jecs": "https://github.com/NormalDuck/jecs"
 	}
 }
