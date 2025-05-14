@@ -2,29 +2,26 @@ import { Entity, Query, World } from "@rbxts/jecs";
 
 type Component<T = any> = Entity<T>;
 
-type nilValue = {
-  readonly _nominal_nil_value: unique symbol;
+type enities = {
+  value: Map<Entity, any>;
+  special: Map<Entity, deleteValue | nilValue>;
 };
 
-type deleteValue = {
-  readonly _nominal_delete_value: unique symbol;
-};
+type nilValue = "__n";
+
+type deleteValue = "__d";
 
 type PlayerObject = Player | Player[] | ((arg: Player) => boolean);
 
 declare namespace Feces {
-  type applyable = Map<
-    Component,
-    { value: Map<Entity, any>; special: Map<Entity, deleteValue | nilValue> }
-  > & { __d: Entity };
+  type applyable = {
+    [K: Component]: {
+      value: Map<Entity, any>;
+      special: Map<Entity, deleteValue | nilValue>;
+    };
+  } & { __d: Entity };
   type deletes = Map<Player, Entity>;
-  type changes = Map<
-    Component,
-    Map<
-      Player,
-      { value: Map<Entity, any>; special: Map<Entity, deleteValue | nilValue> }
-    >
-  >;
+  type changes = Map<Component, Map<Player, enities>>;
   function group(changes: changes, deletes?: deletes): Map<Player, applyable>;
   class feces {
     constructor(world: World);
