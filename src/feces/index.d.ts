@@ -15,13 +15,14 @@ type PlayerObject = Player | Player[] | ((arg: Player) => boolean);
 
 declare namespace Feces {
   type applyable = {
-    [K: Component]: {
-      value: Map<Entity, any>;
-      special: Map<Entity, deleteValue | nilValue>;
-    };
-  } & { __d: Entity };
+    [K: Component]: data;
+  };
   type deletes = Map<Player, Entity>;
   type changes = Map<Component, Map<Player, enities>>;
+  type data = {
+    value: Map<Entity, any>;
+    special: Map<Entity, deleteValue | nilValue>;
+  };
   function group(changes: changes, deletes?: deletes): Map<Player, applyable>;
   class feces {
     constructor(world: World);
