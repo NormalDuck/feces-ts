@@ -14,9 +14,7 @@ type deleteValue = "__d";
 type PlayerObject = Player | Player[] | ((arg: Player) => boolean);
 
 declare namespace Feces {
-  type applyable = {
-    [K: Component]: data;
-  };
+  type applyable = Map<Component, data>
   type deletes = Map<Player, Entity>;
   type changes = Map<Component, Map<Player, enities>>;
   type data = {
